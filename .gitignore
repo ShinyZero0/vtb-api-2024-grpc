@@ -1,0 +1,8 @@
+generated-proto
+server-models
+bin
+dist
+*.pem
+*.csr
+*.crt
+*.db

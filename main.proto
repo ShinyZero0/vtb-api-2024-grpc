@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package	chat;
+
+
+option go_package="codeberg.org/shinyzero0/vtb-api-2024-grpc/generated-proto";
+
+service	Chat {
+	rpc	Stream(stream StreamRequest) returns (stream StreamResponse) {}
+}
+
+message	StreamRequest {
+	string message = 2;
+}
+
+message	StreamResponse {
+	string message = 2;
+	int64 sender_id = 6;
+}
