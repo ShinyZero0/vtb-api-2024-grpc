@@ -19,7 +19,6 @@ import (
 	proto "codeberg.org/shinyzero0/vtb-api-2024-grpc/generated-proto"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -87,13 +86,13 @@ func f() error {
 	if err != nil {
 		return err
 	}
-	// tlsconf, err := utils.LoadTlSConfig("server.pem", "server-key.pem", "root.pem")
-	// if err != nil {
-	// 	return err
-	// }
+	tlsconf, err := utils.LoadTlSConfig("server.pem", "server-key.pem", "root.pem")
+	if err != nil {
+		return err
+	}
 	srv := grpc.NewServer(
 		grpc.StreamInterceptor(MiddlewareHandler),
-		grpc.Creds(insecure.NewCredentials()),
+		grpc.Creds(tlsconf),
 		// grpc.Creds(tlsconf),
 	)
 

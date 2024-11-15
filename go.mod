@@ -4,7 +4,7 @@ go 1.23.2
 
 require (
 	github.com/dgraph-io/badger/v4 v4.3.1
-	github.com/envoyproxy/go-control-plane v0.13.1
+	github.com/envoyproxy/go-control-plane v0.13.0
 	github.com/friendsofgo/errors v0.9.2
 	github.com/go-loremipsum/loremipsum v1.1.3
 	github.com/gofiber/fiber/v2 v2.52.5
@@ -14,7 +14,7 @@ require (
 	github.com/volatiletech/strmangle v0.0.8
 	golang.org/x/oauth2 v0.24.0
 	google.golang.org/grpc v1.68.0
-	google.golang.org/protobuf v1.35.1
+	google.golang.org/protobuf v1.35.2
 	modernc.org/sqlite v1.33.1
 )
 
@@ -61,7 +61,7 @@ require (
 	golang.org/x/text v0.20.0 // indirect
 	golang.org/x/tools v0.27.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20241104194629-dd2ea8efbc28 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20241113202542-65e8d215514f // indirect
 	lukechampine.com/uint128 v1.3.0 // indirect
 	modernc.org/cc/v3 v3.41.0 // indirect
 	modernc.org/ccgo/v3 v3.17.0 // indirect

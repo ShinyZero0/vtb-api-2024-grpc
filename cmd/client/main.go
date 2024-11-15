@@ -10,7 +10,6 @@ import (
 	proto "codeberg.org/shinyzero0/vtb-api-2024-grpc/generated-proto"
 	"codeberg.org/shinyzero0/vtb-api-2024-grpc/utils"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/oauth"
 
 	"github.com/dgraph-io/badger/v4"
@@ -45,7 +44,7 @@ func f() error {
 	}
 	// ctx := context.Background()
 	// const host = "localhost"
-	const scheme = "http"
+	const scheme = "ttps"
 	endpoint := fmt.Sprintf("%s://%s/register", scheme, authAddr)
 	gc := MakeGetClient(db)
 	reg := makeReg(endpoint)
