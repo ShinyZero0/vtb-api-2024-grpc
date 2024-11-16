@@ -1,0 +1,68 @@
+services:
+    smallstep:
+        # image: smallstep/step-ca
+        build: ./ca
+        ports: 
+            - "9000:9000"
+        environment:
+            - DOCKER_STEPCA_INIT_NAME=Smallstep
+            - DOCKER_STEPCA_INIT_DNS_NAMES=localhost,smallstep
+            - DOCKER_STEPCA_INIT_REMOTE_MANAGEMENT=true
+            - DOCKER_STEPCA_INIT_PASSWORD_FILE=/run/secrets/password
+            - FINGERPRINT_PATH=/var/local/fingerprint/fingerprint
+        networks:
+            - intranet
+        volumes:
+            - fingerprint:/var/local/fingerprint:rw
+            -
+                type: volume
+                source: step
+                target: /home/step
+                read_only: false
+        secrets: [ password ]
+    renewer:
+        build: ./oidc-mock-renewer
+        networks:
+            - intranet
+        secrets:
+            - password
+        environment:
+            - STEP_CA_URL=https://smallstep:9000
+            - STEPPATH=/home/step
+            - STEP=/home/step
+            - COMMON_NAME=mock_oidc
+            - STEP_PASSWORD_FILE=/run/secrets/password
+            - FINGERPRINT_PATH=/var/local/fingerprint/fingerprint
+        depends_on:
+            - smallstep
+        volumes:
+            - mock_oidc_certificates:/var/local/step:rw
+            - step:/home/step:ro
+            # - fingerprint:/var/local/fingerprint:ro
+    mock_oidc:
+        build: .
+        depends_on:
+            - renewer
+        networks:
+            - intranet
+        ports:
+            - "9999:9000"
+        command: /project/bin/oidc-server-mock
+        environment:
+            - LISTEN_ADDR=:9000
+            - CERTFILE=/var/local/step/site.crt
+            - KEYFILE=/var/local/step/site.key
+            - CAFILE=/var/local/step/root_ca.crt
+        volumes:
+            - mock_oidc_certificates:/var/local/step:ro
+
+networks:
+    intranet:
+volumes:
+    step:
+    app:
+    mock_oidc_certificates:
+    fingerprint:
+secrets:
+    password:
+        file: ./password.txt

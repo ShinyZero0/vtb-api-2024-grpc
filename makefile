@@ -1,4 +1,4 @@
-BINS = bin/server bin/client bin/authserver
+BINS = bin/server bin/client bin/authserver bin/oidc-server-mock
 all: $(BINS)
 bin/client: generated-proto
 bin/server: generated-proto server-models
@@ -18,16 +18,25 @@ server-models: server-sqlboiler.toml server.db
 
 %.db: dbschema.%.sqlite.sql
 	sqlite3 $@ -init $< .exit
-root.pem: cfssl.json
-	# cfssl selfsign -config $< --profile rootca "Dev Testing CA" csr.json | cfssljson -bare root
-	cfssl gencert -initca csr.json | cfssljson -bare root
-%.pem: csr.json root.pem
-	cfssl genkey $< | cfssljson -bare $(@:%.pem=%)
-	cfssl sign -ca root.pem -ca-key root-key.pem -config cfssl.json -profile $(@:%.pem=%) $(@:%.pem=%).csr | cfssljson -bare $(@:%.pem=%)
 
+root.key:
+	openssl genrsa -out $@ 2048
+root.pem: root.key
+	openssl req -config root.conf -new -x509 -key $< -out $@
+%.conf: sanstr.txt
+	cat /etc/ssl/openssl.cnf $<
+%.csr %.key: %.conf
+	openssl req -new -nodes -newkey rsa:4096 -keyout $*.key -out $@ -batch -subj "/C=DE/ST=Hamburg/L=Hamburg/O=Patrick CA/OU=router/CN=$*.box" -reqexts SAN -config $<
+
+%.pem: root.key root.pem %.csr %.key
+	openssl x509 -req -in $*.req -CA root.pem -CAkey root.key -CAcreateserial -out $@ -days 3650 -sha256 -extfile <(printf "subjectAltName=DNS:localhost,IP:127.0.0.1")
+
+%-key.pem: %.key
+	cp $< $@
 # cfssl sign -ca root.pem -ca-key root-key.pem -config cfssl.json -profile client client.csr | cfssljson -bare client
 
-CERTS = root.pem client.pem server.pem
+CERTS = root.pem client.pem server.pem client-key.pem server-key.pem
+.PRECIOUS: %.key
 certs: $(CERTS)
 clean:
 	git clean -xf

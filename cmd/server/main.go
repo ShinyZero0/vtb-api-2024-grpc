@@ -86,7 +86,7 @@ func f() error {
 	if err != nil {
 		return err
 	}
-	tlsconf, err := utils.LoadTlSConfig("server.pem", "server-key.pem", "root.pem")
+	tlsconf, err := utils.LoadTlSTransport("server.pem", "server-key.pem", "root.pem")
 	if err != nil {
 		return err
 	}

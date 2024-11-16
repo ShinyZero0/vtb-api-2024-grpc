@@ -35,6 +35,9 @@ https://github.com/smallstep/certificates
 
 ## oidc for client ui
 
+### mocks
+- <https://github.com/oauth2-proxy/mockoidc>
+
 ## combine?
 
 separate ports, one with mtls, another unencrypted (for encrypting with sidecar proxy) and token-authenticated
@@ -69,4 +72,9 @@ chat
 grpc
 
 # business logic
+
 doin a chat
+
+## spamming with bots
+
+- <https://superuser.openinfra.dev/articles/run-load-balanced-service-docker-containers-openstack/>

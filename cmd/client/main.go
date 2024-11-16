@@ -65,7 +65,7 @@ func f() error {
 	tsrcgrpc := oauth.TokenSource{
 		TokenSource: tsrc,
 	}
-	tlsc, err := utils.LoadTlSConfig("client.pem", "client-key.pem", "root.pem")
+	tlsc, err := utils.LoadTlSTransport("client.pem", "client-key.pem", "root.pem")
 	if err != nil {
 		return err
 	}
