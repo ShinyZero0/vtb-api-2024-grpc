@@ -9,11 +9,10 @@ services:
             - DOCKER_STEPCA_INIT_DNS_NAMES=localhost,smallstep
             - DOCKER_STEPCA_INIT_REMOTE_MANAGEMENT=true
             - DOCKER_STEPCA_INIT_PASSWORD_FILE=/run/secrets/password
-            - FINGERPRINT_PATH=/var/local/fingerprint/fingerprint
+            - DOCKER_STEPCA_INIT_OIDC_ENDPOINT=https://mock_oidc:9000/oidc/.well-known/openid-configuration
         networks:
             - intranet
         volumes:
-            - fingerprint:/var/local/fingerprint:rw
             -
                 type: volume
                 source: step
@@ -32,13 +31,11 @@ services:
             - STEP=/home/step
             - COMMON_NAME=mock_oidc
             - STEP_PASSWORD_FILE=/run/secrets/password
-            - FINGERPRINT_PATH=/var/local/fingerprint/fingerprint
         depends_on:
             - smallstep
         volumes:
             - mock_oidc_certificates:/var/local/step:rw
             - step:/home/step:ro
-            # - fingerprint:/var/local/fingerprint:ro
     mock_oidc:
         build: .
         depends_on:
@@ -62,7 +59,6 @@ volumes:
     step:
     app:
     mock_oidc_certificates:
-    fingerprint:
 secrets:
     password:
         file: ./password.txt

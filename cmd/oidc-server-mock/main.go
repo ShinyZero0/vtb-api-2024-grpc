@@ -7,18 +7,20 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"time"
 
 	"codeberg.org/shinyzero0/vtb-api-2024-grpc/utils"
 	"github.com/oauth2-proxy/mockoidc"
 )
 
 func main() {
-	if err := f(); err != nil {
+	if err := fTLS(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
 }
 func fTLS() error {
+	time.Sleep(10 * time.Second)
 	certfile, err1 := utils.GetEnv("CERTFILE")
 	keyfile, err2 := utils.GetEnv("KEYFILE")
 	cafile, err3 := utils.GetEnv("CAFILE")

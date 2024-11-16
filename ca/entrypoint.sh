@@ -68,6 +68,12 @@ function step_ca_init () {
 		)
 	fi
 	step ca	init "${setup_args[@]}"
+	if [ -n "$DOCKER_STEPCA_INIT_OIDC_ENDPOINT" ]; then
+		( sleep 15; step ca provisioner add mock --type OIDC \
+			--client-id 12345 \
+			--client-secret hackme \
+			--configuration-endpoint $DOCKER_STEPCA_INIT_OIDC_ENDPOINT) &
+	fi
 	echo ""
 	if [ "${DOCKER_STEPCA_INIT_REMOTE_MANAGEMENT}" == "true" ];	then
 		echo "👉 Your CA administrative	username is: ${DOCKER_STEPCA_INIT_ADMIN_SUBJECT}"
@@ -86,5 +92,4 @@ if [ ! -f "${STEPPATH}/config/ca.json" ]; then
 	init_if_possible
 fi
 
-# step certificate fingerprint $STEPPATH/certs/root_ca.crt > $FINGERPRINT_PATH
 exec "${@}"
