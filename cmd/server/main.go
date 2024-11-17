@@ -170,6 +170,9 @@ func (s *server) MiddlewareHandler(srv any, ss grpc.ServerStream, info *grpc.Str
 	// 	return
 	// }(time.NewTimer(exp.Time.Sub(time.Now())).C)
 	sub, err := parseInt64(clis)
+	if err != nil {
+		fmt.Println(err)
+	}
 	cli := s.chat.ConnectClient(sub)
 	defer s.chat.DisconnectClient(cli)
 	ctx := context.WithValue(ss.Context(), "cli", cli)

@@ -4,11 +4,15 @@ services:
         build: ./ca
         ports: 
             - "9000:9000"
+            - "10000:10000"
         environment:
             - DOCKER_STEPCA_INIT_NAME=Smallstep
             - DOCKER_STEPCA_INIT_DNS_NAMES=localhost,smallstep
             - DOCKER_STEPCA_INIT_REMOTE_MANAGEMENT=true
             - DOCKER_STEPCA_INIT_PASSWORD_FILE=/run/secrets/password
+            - STEP_PASSWORD_FILE=/run/secrets/password
+            - STEP_ADMIN_SUBJECT=step
+            - STEP_PROVISIONER=admin
             - DOCKER_STEPCA_INIT_OIDC_ENDPOINT=https://mock_oidc:9000/oidc/.well-known/openid-configuration
         networks:
             - intranet
@@ -28,6 +32,8 @@ services:
         environment:
             - STEP_CA_URL=https://smallstep:9000
             - STEPPATH=/home/step
+            - STEP_ADMIN_SUBJECT=step
+            - STEP_PROVISIONER=admin
             - STEP=/home/step
             - COMMON_NAME=mock_oidc
             - STEP_PASSWORD_FILE=/run/secrets/password
@@ -36,22 +42,102 @@ services:
         volumes:
             - mock_oidc_certificates:/var/local/step:rw
             - step:/home/step:ro
+    server_renewer:
+        build: ./oidc-mock-renewer
+        networks:
+            - intranet
+        secrets:
+            - password
+        environment:
+            - STEP_CA_URL=https://smallstep:9000
+            - STEPPATH=/home/step
+            - STEP=/home/step
+            - STEP_ADMIN_SUBJECT=step
+            - STEP_PROVISIONER=admin
+            - COMMON_NAME=server
+            - STEP_PASSWORD_FILE=/run/secrets/password
+        depends_on:
+            - smallstep
+        volumes:
+            - server_certificates:/var/local/step:rw
+            - step:/home/step:ro
     mock_oidc:
         build: .
-        depends_on:
-            - renewer
         networks:
             - intranet
         ports:
             - "9999:9000"
         command: /project/bin/oidc-server-mock
         environment:
-            - LISTEN_ADDR=:9000
+            - LISTEN_ADDR=mock_oidc:9000
             - CERTFILE=/var/local/step/site.crt
             - KEYFILE=/var/local/step/site.key
             - CAFILE=/var/local/step/root_ca.crt
         volumes:
             - mock_oidc_certificates:/var/local/step:ro
+    server:
+        build: .
+        depends_on: [ server_renewer ]
+        networks:
+            - intranet
+        ports: []
+            # - "9999:9000"
+        command: sh -c 'sleep 10; /project/bin/server'
+        environment:
+            - LISTEN_ADDR=server:9000
+            - JWT_SECRET=hackme
+            - CERTFILE=/var/local/step/site.crt
+            - KEYFILE=/var/local/step/site.key
+            - CAFILE=/var/local/step/root_ca.crt
+        volumes:
+            - server_certificates:/var/local/step:ro
+    # client1_renewer:
+    #     build: ./client_renewer
+    #     networks:
+    #         - intranet
+    #     secrets: []
+    #         # - password
+    #     environment:
+    #         - STEP_CA_URL=https://smallstep:9000
+    #         - STEPPATH=/home/step
+    #         - STEP=/home/step
+    #         # - STEP_ADMIN_SUBJECT=step
+    #         # - STEP_PROVISIONER=admin
+    #         # - COMMON_NAME=client1
+    #         # - STEP_PASSWORD_FILE=/run/secrets/password
+    #     depends_on:
+    #         - smallstep
+    #     volumes:
+    #         - client1_certificates:/var/local/step:rw
+    #         - step:/home/step:ro
+    client1:
+        build: .
+        networks:
+            - intranet
+        ports: []
+            # - "9999:9000"
+        command: sh -c 'sleep 12; /project/bin/client'
+        environment:
+            - SERVER_ADDR=server:9000
+            - CERTFILE=/var/local/step/site.crt
+            - KEYFILE=/var/local/step/site.key
+            - CAFILE=/var/local/step/root_ca.crt
+        volumes:
+            - client1_certificates:/var/local/step:ro
+    client2:
+        build: .
+        networks:
+            - intranet
+        ports: []
+            # - "9999:9000"
+        command: sh -c 'sleep 12; /project/bin/client'
+        environment:
+            - SERVER_ADDR=server:9000
+            - CERTFILE=/var/local/step/site.crt
+            - KEYFILE=/var/local/step/site.key
+            - CAFILE=/var/local/step/root_ca.crt
+        volumes:
+            - client2_certificates:/var/local/step:rw
 
 networks:
     intranet:
@@ -59,6 +145,9 @@ volumes:
     step:
     app:
     mock_oidc_certificates:
+    server_certificates:
+    client1_certificates:
+    client2_certificates:
 secrets:
     password:
         file: ./password.txt

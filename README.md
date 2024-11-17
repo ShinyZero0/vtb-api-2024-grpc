@@ -21,8 +21,13 @@ step ca certificate --provisioner mock someone mf.crt mf.key
 docker compose -f yea.yml exec smallstep curl -L 'https://mock_oidc:9000/oidc/authorize?client_id=12345&code_challenge=MKsompFPHOHnzCr27WBNEPpP-zeFC40QBNB97Q3zq8s&code_challenge_method=S256&nonce=9ce6f8ec734a79a3ca082010b16796abe991aad9b5bef7e643326b097f9fe7ff&redirect_uri=http%3A%2F%2F127.0.0.1%3A39393&response_type=code&scope=openid+email&state=3NDTaWndYrWGRNpHvRMeiZGx7NrLnYi4'
 ```
 
-
 # идентификация пользователя по сертификату
 
-[код](./cmd/server/main.go#L162)
+Это происходит [здесь](./cmd/server/main.go#L162)
 
+# развертывание инфраструктуры и проекта
+
+в [compose файле](./yea.yml) можно увидеть, как разворачивается инфраструктура проекта, чат-сервер и 2 клиента
+
+на текущей стадии разработки требуется некоторое количество
+вмешательства для копирования сертификатов между контейнерами

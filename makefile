@@ -1,4 +1,4 @@
-BINS = bin/server bin/client bin/authserver bin/oidc-server-mock
+BINS = bin/server bin/client bin/oidc-server-mock
 all: $(BINS)
 bin/client: generated-proto
 bin/server: generated-proto server-models
@@ -41,3 +41,5 @@ certs: $(CERTS)
 clean:
 	git clean -xf
 	# rm $(CERTS)
+presentation.html: presentation/index.md presentation/style.css
+	pandoc -c presentation/style.css -s -t revealjs -o $@ $<

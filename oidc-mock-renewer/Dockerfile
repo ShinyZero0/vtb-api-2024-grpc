@@ -7,4 +7,5 @@ RUN chmod 0644 /var/spool/cron/crontabs/root
 
 COPY entrypoint.sh /
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["/usr/sbin/crond", "-l", "2", "-f"]
+# CMD ["/usr/sbin/crond", "-l", "2", "-f"]
+CMD sleep 1000000

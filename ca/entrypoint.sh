@@ -1,5 +1,5 @@
 #!/bin/bash
-set	-exo pipefail
+set	-eo pipefail
 
 # Paraphrased from:
 # https://github.com/influxdata/influxdata-docker/blob/0d341f18067c4652dfa8df7dcb24d69bf707363d/influxdb/2.0/entrypoint.sh
@@ -69,7 +69,8 @@ function step_ca_init () {
 	fi
 	step ca	init "${setup_args[@]}"
 	if [ -n "$DOCKER_STEPCA_INIT_OIDC_ENDPOINT" ]; then
-		( sleep 15; step ca provisioner add mock --type OIDC \
+		( sleep 15
+		step ca provisioner add mock --type OIDC \
 			--client-id 12345 \
 			--client-secret hackme \
 			--configuration-endpoint $DOCKER_STEPCA_INIT_OIDC_ENDPOINT) &
