@@ -7,11 +7,9 @@ import (
 	"io"
 	"log"
 	"strconv"
-	"strings"
 	"sync"
 
 	"codeberg.org/shinyzero0/vtb-api-2024-grpc/utils"
-	"github.com/golang-jwt/jwt/v5"
 
 	"fmt"
 	"net"
@@ -19,7 +17,8 @@ import (
 	proto "codeberg.org/shinyzero0/vtb-api-2024-grpc/generated-proto"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/peer"
 )
 
 func main() {
@@ -31,22 +30,22 @@ type Chat struct {
 	clients_mtx sync.RWMutex
 }
 type Client struct {
-	ch  (chan *proto.StreamResponse)
-	id  int64
-	srv grpc.BidiStreamingServer[proto.StreamRequest, proto.StreamResponse]
+	ch (chan *proto.StreamResponse)
+	id int64
+	// srv grpc.BidiStreamingServer[proto.StreamRequest, proto.StreamResponse]
 }
 
-func (c *Client) HandleMessages() {
+func (c *Client) HandleMessages(bidi grpc.BidiStreamingServer[proto.StreamRequest, proto.StreamResponse]) {
 	for msg := range c.ch {
-		if err := c.srv.Send(msg); err != nil {
+		if err := bidi.Send(msg); err != nil {
 			log.Println(err)
 		}
 	}
 }
-func (c *Client) SendMessage(req *proto.StreamRequest) {
+func (c *Client) SendMessage(req *proto.StreamRequest, sid int64) {
 	c.ch <- &proto.StreamResponse{
 		Message:  req.GetMessage(),
-		SenderId: 0,
+		SenderId: sid,
 	}
 }
 func (c *Chat) ConnectClient(cid int64) Client {
@@ -65,15 +64,21 @@ func (c *Chat) DisconnectClient(cli Client) {
 	delete(c.Clients, cli)
 	close(cli.ch)
 }
-func (c *Chat) SendMessage(req *proto.StreamRequest) {
+func (c *Chat) SendMessage(req *proto.StreamRequest, sid int64) {
 	c.clients_mtx.RLock()
-	for cli := range c.Clients {
-		cli.SendMessage(req)
-	}
 	defer c.clients_mtx.RUnlock()
+	for cli := range c.Clients {
+		cli.SendMessage(req, sid)
+	}
 }
 
 func f() error {
+	certfile, err1 := utils.GetEnv("CERTFILE")
+	keyfile, err2 := utils.GetEnv("KEYFILE")
+	cafile, err3 := utils.GetEnv("CAFILE")
+	if err := errors.Join(err1, err2, err3); err != nil {
+		return err
+	}
 	lisAddr, err := utils.GetEnv("LISTEN_ADDR")
 	if err != nil {
 		return err
@@ -86,20 +91,25 @@ func f() error {
 	if err != nil {
 		return err
 	}
-	tlsconf, err := utils.LoadTlSTransport("server.pem", "server-key.pem", "root.pem")
+	tlsconf, err := utils.LoadTlSTransport(certfile, keyfile, cafile)
 	if err != nil {
 		return err
 	}
+	s := &server{
+		UnimplementedChatServer: proto.UnimplementedChatServer{},
+		chat: Chat{
+			Clients:     make(map[Client]struct{}),
+			clients_mtx: sync.RWMutex{},
+		},
+		jwtSecret: jwtSecret,
+	}
 	srv := grpc.NewServer(
-		grpc.StreamInterceptor(MiddlewareHandler),
+		grpc.StreamInterceptor(s.MiddlewareHandler),
 		grpc.Creds(tlsconf),
 		// grpc.Creds(tlsconf),
 	)
 
-	proto.RegisterChatServer(srv, &server{
-		chat:      Chat{},
-		jwtSecret: jwtSecret,
-	})
+	proto.RegisterChatServer(srv, s)
 	return srv.Serve(lis)
 }
 
@@ -115,7 +125,7 @@ func (s *server) Stream(bidi grpc.BidiStreamingServer[proto.StreamRequest, proto
 	if !ok {
 		panic("fuck")
 	}
-	go cli.HandleMessages()
+	go cli.HandleMessages(bidi)
 LOOP:
 	for {
 		select {
@@ -129,49 +139,46 @@ LOOP:
 				}
 				return err
 			}
-			s.chat.SendMessage(req)
+			s.chat.SendMessage(req, cli.id)
 		}
 	}
 	return nil
 }
-func MiddlewareHandler(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) (err error) {
-	// you can write your own code here to check client tls certificate
-	// if p, ok := peer.FromContext(ss.Context()); ok {
-	// 	if mtls, ok := p.AuthInfo.(credentials.TLSInfo); ok {
-	// 		for _, item := range mtls.State.PeerCertificates {
-	// 			log.Println("client certificate subject:", item.Subject.String())
-	// 		}
-	// 	}
-	// }
-	md, ok := metadata.FromIncomingContext(ss.Context())
-	if !ok {
-		panic("fuck")
+
+type wrappedServerStream struct {
+	grpc.ServerStream
+	ctx context.Context
+}
+
+// Override the Context method to return the custom context
+func (w *wrappedServerStream) Context() context.Context {
+	return w.ctx
+}
+func (s *server) MiddlewareHandler(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) (err error) {
+	var clis string
+	if p, ok := peer.FromContext(ss.Context()); ok {
+		if mtls, ok := p.AuthInfo.(credentials.TLSInfo); ok {
+			for _, item := range mtls.State.PeerCertificates {
+				clis = item.Subject.CommonName
+			}
+		}
 	}
-	token := strings.TrimPrefix(md.Get("authorization")[0], "Bearer ")
-	s := srv.(*server)
-	tok, err := jwt.Parse(
-		token,
-		func(t *jwt.Token) (interface{}, error) { return []byte(s.jwtSecret), nil },
-	)
-	exp, err := tok.Claims.GetExpirationTime()
 	// ctx, cancel := context.WithCancel(ss.Context())
 	// go func(c <-chan time.Time) {
 	// 	<-c
 	// 	cancel()
 	// 	return
 	// }(time.NewTimer(exp.Time.Sub(time.Now())).C)
-	ctx, cancel := context.WithDeadline(ss.Context(), exp.Time)
-	defer cancel()
-	sub_, err := tok.Claims.GetSubject()
-	if err != nil {
-		return err
-	}
-	sub, err := parseInt64(sub_)
+	sub, err := parseInt64(clis)
 	cli := s.chat.ConnectClient(sub)
 	defer s.chat.DisconnectClient(cli)
-	ctx = context.WithValue(ctx, "cli", cli)
+	ctx := context.WithValue(ss.Context(), "cli", cli)
+	newss := &wrappedServerStream{
+		ServerStream: ss,
+		ctx:          ctx,
+	}
 
-	return handler(ctx, ss)
+	return handler(srv, newss)
 }
 func parseInt64(s string) (int64, error) {
 	return strconv.ParseInt(s, 10, 64)

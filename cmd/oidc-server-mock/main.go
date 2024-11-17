@@ -4,7 +4,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"net"
 	"os"
 	"os/signal"
 	"time"
@@ -45,13 +44,15 @@ func withServer(srvAddr string, tlsc *tls.Config, cb func(m *mockoidc.MockOIDC) 
 	if err != nil {
 		return err
 	}
-	ln, err := net.Listen("tcp", srvAddr)
+	// ln, err := net.Listen("tcp", srvAddr)
+	ln, err := tls.Listen("tcp", srvAddr, tlsc)
 	if err != nil {
 		return err
 	}
 	if err := m.Start(ln, tlsc); err != nil {
 		return err
 	}
+	m.Server.Addr = srvAddr
 	if err := cb(m); err != nil {
 		return err
 	}
@@ -71,9 +72,11 @@ func serveTLS(certFile, keyFile, caFile, srvAddr string) error {
 	return withServer(srvAddr, tlsc, queueUsers)
 }
 func queueUsers(m *mockoidc.MockOIDC) error {
+	m.ClientID = "12345"
+	m.ClientSecret = "hackme"
 	for i := 0; i < 500; i++ {
 		m.QueueUser(&mockoidc.MockUser{
-			Subject:           fmt.Sprintf("user-%d", i),
+			Subject:           fmt.Sprintf("%d", i),
 			Email:             fmt.Sprintf("user-%d@example.com", i),
 			EmailVerified:     true,
 			PreferredUsername: fmt.Sprintf("user-%d", i),

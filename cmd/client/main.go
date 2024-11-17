@@ -6,16 +6,14 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	proto "codeberg.org/shinyzero0/vtb-api-2024-grpc/generated-proto"
 	"codeberg.org/shinyzero0/vtb-api-2024-grpc/utils"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/oauth"
 
 	"github.com/dgraph-io/badger/v4"
 	"github.com/go-loremipsum/loremipsum"
-	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/clientcredentials"
 	"golang.org/x/oauth2/dcrp"
 )
 
@@ -26,56 +24,45 @@ func main() {
 	}
 }
 func f() error {
-	srvAddr, err := utils.GetEnv("SERVER_ADDR")
+	srvAddr, err0 := utils.GetEnv("SERVER_ADDR")
+	certfile, err1 := utils.GetEnv("CERTFILE")
+	keyfile, err2 := utils.GetEnv("KEYFILE")
+	cafile, err3 := utils.GetEnv("CAFILE")
+	if err := errors.Join(err0, err1, err2, err3); err != nil {
+		return err
+	}
+	tlsc, err := utils.LoadTlSTransport(certfile, keyfile, cafile)
 	if err != nil {
 		return err
 	}
-	authAddr, err := utils.GetEnv("AUTH_ADDR")
-	if err != nil {
-		return err
-	}
-	dbPath, err := utils.GetEnv("DATABASE")
-	if err != nil {
-		return err
-	}
-	db, err := badger.Open(badger.DefaultOptions(dbPath))
-	if err != nil {
-		return err
-	}
-	// ctx := context.Background()
-	// const host = "localhost"
-	const scheme = "ttps"
-	endpoint := fmt.Sprintf("%s://%s/register", scheme, authAddr)
-	gc := MakeGetClient(db)
-	reg := makeReg(endpoint)
-	cid, cs, err := MakeHandleAllShitAndGetClient(reg, gc, MakeSaveClientData(db))()
-	if err != nil {
-		return err
-	}
-	ccconf := clientcredentials.Config{
-		ClientID:       cid,
-		ClientSecret:   cs,
-		TokenURL:       fmt.Sprintf("%s/token", authAddr),
-		Scopes:         []string{"global"},
-		EndpointParams: map[string][]string{},
-		AuthStyle:      oauth2.AuthStyleInHeader,
-	}
+	// authAddr, err := utils.GetEnv("AUTH_ADDR")
+	// if err != nil {
+	// 	return err
+	// }
+	// dbPath, err := utils.GetEnv("DATABASE")
+	// if err != nil {
+	// 	return err
+	// }
+	// db, err := badger.Open(badger.DefaultOptions(dbPath))
+	// if err != nil {
+	// 	return err
+	// }
 	ctx := context.Background()
-	tsrc := ccconf.TokenSource(ctx)
-	tsrcgrpc := oauth.TokenSource{
-		TokenSource: tsrc,
-	}
-	tlsc, err := utils.LoadTlSTransport("client.pem", "client-key.pem", "root.pem")
-	if err != nil {
-		return err
-	}
+	// const host = "localhost"
+	// certfile, err1 := utils.GetEnv("CERTFILE")
+	// keyfile, err2 := utils.GetEnv("KEYFILE")
+	// cafile, err3 := utils.GetEnv("CAFILE")
+	// tlsc, err := utils.LoadTlSTransport(certfile, keyfile, cafile)
+	// if err != nil {
+	// 	return err
+	// }
 
-	conn, err := grpc.Dial(srvAddr,
+	conn, err := grpc.NewClient(srvAddr,
 		grpc.WithTransportCredentials(tlsc),
-		grpc.WithPerRPCCredentials(tsrcgrpc),
+		// grpc.WithPerRPCCredentials(tsrcgrpc),
 	)
 	if err != nil {
-		fmt.Println(5) 
+		fmt.Println(5)
 		return err
 	}
 	ccli := proto.NewChatClient(conn)
@@ -89,13 +76,15 @@ func f() error {
 	return nil
 }
 func send(bidi grpc.BidiStreamingClient[proto.StreamRequest, proto.StreamResponse]) {
+	loremIpsumGenerator := loremipsum.New()
+	// tick := time.Tick(300 * time.Millisecond)
 	for {
-		loremIpsumGenerator := loremipsum.New()
 		text := loremIpsumGenerator.Paragraph()
 		if err := bidi.Send(&proto.StreamRequest{Message: text}); err != nil {
 			fmt.Println(err)
 			break
 		}
+		time.Sleep(300 * time.Millisecond)
 	}
 }
 func recv(bidi grpc.BidiStreamingClient[proto.StreamRequest, proto.StreamResponse]) {
@@ -105,9 +94,10 @@ func recv(bidi grpc.BidiStreamingClient[proto.StreamRequest, proto.StreamRespons
 			if errors.Is(err, io.EOF) {
 				break
 			}
+			fmt.Println(err)
 			break
 		}
-		fmt.Println(msg.Message)
+		fmt.Printf("%d says: %s\n", msg.GetSenderId(), msg.Message)
 	}
 }
 
