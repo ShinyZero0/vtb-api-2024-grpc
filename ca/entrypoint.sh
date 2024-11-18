@@ -1,9 +1,8 @@
 #!/bin/bash
-set	-eo pipefail
+set	-exo pipefail
 
-# Paraphrased from:
-# https://github.com/influxdata/influxdata-docker/blob/0d341f18067c4652dfa8df7dcb24d69bf707363d/influxdb/2.0/entrypoint.sh
-# (a repo with no LICENSE.md)
+# stealed from:
+# https://github.com/smallstep/certificates/blob/master/docker/entrypoint.sh
 
 export STEPPATH=$(step path)
 
@@ -47,11 +46,9 @@ function step_ca_init () {
 		--address "${DOCKER_STEPCA_INIT_ADDRESS}"
 	)
 	if [ -n	"${DOCKER_STEPCA_INIT_PASSWORD_FILE}" ]; then
-		cat	< "${DOCKER_STEPCA_INIT_PASSWORD_FILE}"	> "${STEPPATH}/password"
-		cat	< "${DOCKER_STEPCA_INIT_PASSWORD_FILE}"	> "${STEPPATH}/provisioner_password"
+		< "${DOCKER_STEPCA_INIT_PASSWORD_FILE}"	tee "${STEPPATH}/password" "${STEPPATH}/provisioner_password"
 	elif [ -n "${DOCKER_STEPCA_INIT_PASSWORD}" ]; then
-		echo "${DOCKER_STEPCA_INIT_PASSWORD}" >	"${STEPPATH}/password"
-		echo "${DOCKER_STEPCA_INIT_PASSWORD}" >	"${STEPPATH}/provisioner_password"
+		echo "${DOCKER_STEPCA_INIT_PASSWORD}" | tee "${STEPPATH}/password" "${STEPPATH}/provisioner_password"
 	else
 		generate_password >	"${STEPPATH}/password"
 		generate_password >	"${STEPPATH}/provisioner_password"
@@ -68,13 +65,15 @@ function step_ca_init () {
 		)
 	fi
 	step ca	init "${setup_args[@]}"
-	if [ -n "$DOCKER_STEPCA_INIT_OIDC_ENDPOINT" ]; then
-		( sleep 15
-		step ca provisioner add mock --type OIDC \
-			--client-id 12345 \
-			--client-secret hackme \
-			--configuration-endpoint $DOCKER_STEPCA_INIT_OIDC_ENDPOINT) &
-	fi
+	# step ca bootstrap --install --fingerprint $fingerprint
+
+	# if [ -n "$DOCKER_STEPCA_INIT_OIDC_ENDPOINT" ]; then
+	# 	( sleep 15
+	# 	step ca provisioner add mock --type OIDC \
+	# 		--client-id 12345 \
+	# 		--client-secret hackme \
+	# 		--configuration-endpoint $DOCKER_STEPCA_INIT_OIDC_ENDPOINT) &
+	# fi
 	echo ""
 	if [ "${DOCKER_STEPCA_INIT_REMOTE_MANAGEMENT}" == "true" ];	then
 		echo "👉 Your CA administrative	username is: ${DOCKER_STEPCA_INIT_ADMIN_SUBJECT}"
