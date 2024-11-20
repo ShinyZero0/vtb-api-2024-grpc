@@ -14,6 +14,7 @@ func LoadTlSTransport(certFile, keyFile, caFile string) (credentials.TransportCr
 	if err != nil {
 		return nil, err
 	}
+	tlsConfig.ClientAuth = tls.RequireAndVerifyClientCert
 	return credentials.NewTLS(tlsConfig), nil
 }
 func LoadTLSConfig(certFile, keyFile, caFile string) (*tls.Config, error) {
@@ -33,8 +34,10 @@ func LoadTLSConfig(certFile, keyFile, caFile string) (*tls.Config, error) {
 	}
 
 	return &tls.Config{
-		ClientAuth:   tls.RequireAndVerifyClientCert,
+		// ClientAuth:   tls.RequireAndVerifyClientCert,
 		Certificates: []tls.Certificate{certificate},
+		RootCAs:      capool,
 		ClientCAs:    capool,
+		MinVersion:   tls.VersionTLS13,
 	}, nil
 }

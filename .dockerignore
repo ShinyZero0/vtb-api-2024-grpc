@@ -13,6 +13,8 @@ Dockerfile
 *.yml
 *.md
 **/*.sh
+!entrypoint.sh
 *.json
 *.conf
 Dockerfile
+presentation

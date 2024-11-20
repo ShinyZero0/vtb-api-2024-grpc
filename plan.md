@@ -27,15 +27,17 @@ need some service to issue certs (semi)automatically in a scalable manner
 
 #### cfssl
 
-#### step-c
+#### smallstep
 
-https://github.com/smallstep/certificates
-
-## oauth b2b
+<https://blog.xentoo.info/2021/09/12/running-a-pki-using-smallstep-certificates-with-docker/>
+- <https://github.com/smallstep/certificates>
+- <https://blog.xentoo.info/2021/09/12/running-a-pki-using-smallstep-certificates-with-docker/>
+- <https://smallstep.com/docs/step-ca/provisioners/#unattended-remote-provisioner-management>
 
 ## oidc for client ui
 
 ### mocks
+
 - <https://github.com/oauth2-proxy/mockoidc>
 
 ## combine?
@@ -71,6 +73,9 @@ chat
 ## streaming
 grpc
 
+streams + cert expiry
+https://github.com/grpc/grpc-go/issues/3021
+
 # business logic
 
 doin a chat
@@ -78,3 +83,8 @@ doin a chat
 ## spamming with bots
 
 - <https://superuser.openinfra.dev/articles/run-load-balanced-service-docker-containers-openstack/>
+
+### docker
+
+- compose scaling/replicating:
+<https://docs.docker.com/reference/compose-file/deploy/#replicas>

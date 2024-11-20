@@ -160,6 +160,7 @@ func (s *server) MiddlewareHandler(srv any, ss grpc.ServerStream, info *grpc.Str
 		if mtls, ok := p.AuthInfo.(credentials.TLSInfo); ok {
 			for _, item := range mtls.State.PeerCertificates {
 				clis = item.Subject.CommonName
+				fmt.Println(clis)
 			}
 		}
 	}

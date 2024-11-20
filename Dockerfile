@@ -10,6 +10,12 @@ RUN apt-get install -y sqlite3
 
 WORKDIR /project
 COPY go.mod go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+	go mod download
 ADD . .
-RUN make
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+	make
+COPY entrypoint.sh /
+ENTRYPOINT ["/entrypoint.sh"]

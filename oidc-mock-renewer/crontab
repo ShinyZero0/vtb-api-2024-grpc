@@ -1,2 +1,2 @@
 # min	hour	day	month	weekday	command
-*	*	*	*	*	step ca renew --force /var/local/step/site.crt /var/local/step/site.key
+*	*	*	*	*	step ca renew --force $CLIENT_CERTS_DIR/site.crt $CLIENT_CERTS_DIR/site.key
