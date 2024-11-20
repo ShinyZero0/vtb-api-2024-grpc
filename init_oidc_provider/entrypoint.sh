@@ -4,27 +4,21 @@ set -exuo pipefail
 # Wait for CA
 # sleep 20
 init() {
-if [ $(step ca provisioner list | jq '[.[]|select(.name=="mock")]|length') -gt 0 ]# Clean old certificates; then
-	return
-fi
 
+# if [ ! -f "$ROOT_CA_FINGERPRINT_PATH" ]; then
+# 	inotifywait -e close_write --include "$(basename $ROOT_CA_FINGERPRINT_PATH)" "$(dirname $ROOT_CA_FINGERPRINT_PATH)"
+# fi
 
-rm -f /var/local/step/root_ca.crt
-rm -f /var/local/step/site.crt /var/local/step/site.key
-
-if [ ! -f "$ROOT_CA_FINGERPRINT_PATH" ]; then
-	inotifywait -e close_write --include "$(basename $ROOT_CA_FINGERPRINT_PATH)" "$(dirname $ROOT_CA_FINGERPRINT_PATH)"
-fi
-
-until curl -k $STEP_CA_URL/healthcheck; do
-	sleep 1
-done
-
-step ca bootstrap --install --fingerprint "$(cat $ROOT_CA_FINGERPRINT_PATH)"
+# step ca bootstrap --install --fingerprint "$(cat $ROOT_CA_FINGERPRINT_PATH)"
 # Download the root certificate
 # export STEP_FINGERPRINT=$(cat $FINGERPRINT_PATH)
 # step ca root $CLIENT_CERTS_DIR/root_ca.crt
 
+if [ $(step ca provisioner list | jq '[.[]|select(.name=="mock")]|length') -gt 0 ]; then
+	return
+fi
+
+step certificate install $(step path)/certs/root_ca.crt
 until curl $OIDC_ENDPOINT; do
 	sleep 1
 done
@@ -39,5 +33,9 @@ step ca provisioner add mock --type OIDC \
 # Download the root certificate
 # step ca certificate --token $STEP_TOKEN $COMMON_NAME CLIENT_CERTS_DIR/site.crt CLIENT_CERTS_DIR/site.key
 }
+until curl -k $STEP_CA_URL/healthcheck; do
+	sleep 1
+done
+
 init
 exec "$@"

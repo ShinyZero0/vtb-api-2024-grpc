@@ -4,6 +4,7 @@ services:
         ports: 
             - "9000:9000"
         environment:
+            - OIDC_ENDPOINT=https://mock_oidc:9000/oidc/.well-known/openid-configuration
             - DOCKER_STEPCA_INIT_NAME=Smallstep
             - DOCKER_STEPCA_INIT_ADDRESS=:9000
             # - STEP_CA_URL=https://smallstep:9000
@@ -22,32 +23,30 @@ services:
         build: ./fingerprint
         environment:
             - ROOT_CA_FINGERPRINT_PATH=/var/local/step/fingerprint/fingerprint
-        # networks:
-        #     - intranet
         volumes:
             - fingerprint:/var/local/step/fingerprint:rw
             - step:/home/step:ro
-    admin_renewer:
-        build: ./oidc-mock-renewer
-        networks:
-            - intranet
-        secrets:
-            - password
-        environment:
-            - CLIENT_CERTS_DIR=/var/local/step/certs
-            - STEP_CA_URL=https://smallstep:9000
-            - ROOT_CA_FINGERPRINT_PATH=/var/local/step/fingerprint/fingerprint
-            - STEPPATH=/home/step
-            - STEP_ADMIN_SUBJECT=step
-            - STEP_PROVISIONER=admin
-            # - STEP=/home/step
-            - COMMON_NAME=step
-            - STEP_PASSWORD_FILE=/run/secrets/password
-        depends_on:
-            - smallstep
-        volumes:
-            - admin_certificates:/var/local/step/certs:rw
-            - fingerprint:/var/local/step/fingerprint:rw
+    # admin_renewer:
+    #     build: ./oidc-mock-renewer
+    #     networks:
+    #         - intranet
+    #     secrets:
+    #         - password
+    #     environment:
+    #         - CLIENT_CERTS_DIR=/var/local/step/certs
+    #         - STEP_CA_URL=https://smallstep:9000
+    #         - ROOT_CA_FINGERPRINT_PATH=/var/local/step/fingerprint/fingerprint
+    #         - STEPPATH=/home/step
+    #         - STEP_ADMIN_SUBJECT=step
+    #         - STEP_PROVISIONER=admin
+    #         # - STEP=/home/step
+    #         - COMMON_NAME=step
+    #         - STEP_PASSWORD_FILE=/run/secrets/password
+    #     depends_on:
+    #         - smallstep
+    #     volumes:
+    #         - admin_certificates:/var/local/step/certs:rw
+    #         - fingerprint:/var/local/step/fingerprint:rw
             # - step:/home/step:ro
     oidc_mock_renewer:
         build: ./oidc-mock-renewer
@@ -59,7 +58,7 @@ services:
             - CLIENT_CERTS_DIR=/var/local/step/certs
             - STEP_CA_URL=https://smallstep:9000
             - ROOT_CA_FINGERPRINT_PATH=/var/local/step/fingerprint/fingerprint
-            - STEPPATH=/home/step
+            # - STEPPATH=/home/step
             - STEP_ADMIN_SUBJECT=step
             - STEP_PROVISIONER=admin
             # - STEP=/home/step
@@ -68,8 +67,9 @@ services:
         depends_on:
             - smallstep
         volumes:
+            - step:/home/step:ro
             - mock_oidc_certificates:/var/local/step/certs:rw
-            - fingerprint:/var/local/step/fingerprint:rw
+            # - fingerprint:/var/local/step/fingerprint:rw
             # - step:/home/step:ro
     mock_oidc:
         build: .
@@ -94,15 +94,18 @@ services:
             # - CLIENT_CERTS_DIR=/var/local/step/certs
             - STEP_CA_URL=https://smallstep:9000
             - ROOT_CA_FINGERPRINT_PATH=/var/local/step/fingerprint/fingerprint
-            - STEPPATH=/home/step
+            # - STEPPATH=/home/step
             - STEP_ADMIN_SUBJECT=step
+            - STEP_ADMIN_PROVISIONER=admin
             - STEP_ADMIN_CREDENTIALS=admin
             # - STEP_PROVISIONER=admin
             # - STEP=/home/step
             - COMMON_NAME=mock_oidc
             - STEP_PASSWORD_FILE=/run/secrets/password
+            - STEP_ADMIN_PASSWORD_FILE=/run/secrets/password
         volumes:
             - fingerprint:/var/local/step/fingerprint:rw
+            - step:/home/step:ro
         networks: [ intranet ]
         secrets: [ password ]
     server_renewer:
@@ -126,14 +129,17 @@ services:
         volumes:
             - server_certificates:/var/local/step/certs:rw
             - fingerprint:/var/local/step/fingerprint:rw
+            - step:/home/step:ro
     server:
         build: .
+            # context: .
+            # dockerfile: server/Dockerfile
         depends_on: [ server_renewer ]
         networks:
             - intranet
         ports: []
             # - "9999:9000"
-        command: sh -c 'sleep 10; /project/bin/server'
+        command: /project/bin/server
         environment:
             - LISTEN_ADDR=server:9000
             - JWT_SECRET=hackme
@@ -167,7 +173,33 @@ services:
         volumes:
             - client1_certificates:/var/local/step/certs:rw
             # - step:/home/step:ro
-            - fingerprint:/var/local/step/fingerprint:rw
+            - fingerprint:/var/local/step/fingerprint:ro
+    client2_renewer:
+        build: ./client_renewer
+        networks:
+            - intranet
+        secrets: []
+            # - password
+        environment:
+            - CLIENT_CERTS_DIR=/var/local/step/certs
+            - STEP_CA_URL=https://smallstep:9000
+            - ROOT_CA_FINGERPRINT_PATH=/var/local/step/fingerprint/fingerprint
+            - STEPPATH=/home/step
+            - STEP_ADMIN_SUBJECT=step
+            - STEP_PROVISIONER=admin
+            # - STEP=/home/step
+            - COMMON_NAME=server
+            - STEP_PASSWORD_FILE=/run/secrets/password
+            # - STEP_ADMIN_SUBJECT=step
+            # - STEP_PROVISIONER=admin
+            # - COMMON_NAME=client1
+            # - STEP_PASSWORD_FILE=/run/secrets/password
+        depends_on:
+            - smallstep
+        volumes:
+            - client2_certificates:/var/local/step/certs:rw
+            # - step:/home/step:ro
+            - fingerprint:/var/local/step/fingerprint:ro
     client1:
         build: .
         networks:
@@ -182,20 +214,20 @@ services:
             - CAFILE=/var/local/step/root_ca.crt
         volumes:
             - client1_certificates:/var/local/step:ro
-    # client2:
-    #     build: .
-    #     networks:
-    #         - intranet
-    #     ports: []
-    #         # - "9999:9000"
-    #     command: sh -c 'sleep 12; /project/bin/client'
-    #     environment:
-    #         - SERVER_ADDR=server:9000
-    #         - CERTFILE=/var/local/step/site.crt
-    #         - KEYFILE=/var/local/step/site.key
-    #         - CAFILE=/var/local/step/root_ca.crt
-    #     volumes:
-    #         - client2_certificates:/var/local/step:rw
+    client2:
+        build: .
+        networks:
+            - intranet
+        ports: []
+            # - "9999:9000"
+        command: sh -c 'sleep 12; /project/bin/client'
+        environment:
+            - SERVER_ADDR=server:9000
+            - CERTFILE=/var/local/step/site.crt
+            - KEYFILE=/var/local/step/site.key
+            - CAFILE=/var/local/step/root_ca.crt
+        volumes:
+            - client2_certificates:/var/local/step:ro
 
 networks:
     intranet:

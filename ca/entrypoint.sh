@@ -60,10 +60,12 @@ function step_ca_init () {
 		setup_args=("${setup_args[@]}" --acme)
 	fi
 	if [ "${DOCKER_STEPCA_INIT_REMOTE_MANAGEMENT}" == "true" ];	then
-		setup_args=("${setup_args[@]}" --remote-management
-					   --admin-subject "${DOCKER_STEPCA_INIT_ADMIN_SUBJECT}"
-		)
+		setup_args=(
+		"${setup_args[@]}"
+		--remote-management
+		--admin-subject "${DOCKER_STEPCA_INIT_ADMIN_SUBJECT}")
 	fi
+
 	step ca	init "${setup_args[@]}"
 	# step ca bootstrap --install --fingerprint $fingerprint
 
@@ -90,6 +92,13 @@ fi
 
 if [ ! -f "${STEPPATH}/config/ca.json" ]; then
 	init_if_possible
+else
+	tree ${STEPPATH}
+	until curl $OIDC_ENDPOINT; do
+		sleep 1
+	done
 fi
+# if [ $(step ca provisioner list | jq '[.[]|select(.name=="mock")]|length') -gt 0 ]; then
+# fi
 
 exec "${@}"

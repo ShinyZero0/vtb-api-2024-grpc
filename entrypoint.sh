@@ -1,5 +1,14 @@
 #!/usr/bin/env sh
 
+# case $1 in
+# 	server)
+# 		server;;
+# 	client)
+# 		client;;
+# 	*)
+# 		exit 1;;
+# esac
+
 set -exu
 
 while sleep 1; do

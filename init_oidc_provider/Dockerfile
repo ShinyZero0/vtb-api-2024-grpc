@@ -4,7 +4,7 @@ USER root
 ADD crontab /var/spool/cron/crontabs/root
 RUN chmod 0644 /var/spool/cron/crontabs/root
 RUN apk update
-RUN apk add inotify-tools
+RUN apk add inotify-tools jq
 
 COPY entrypoint.sh /
 ENTRYPOINT ["/entrypoint.sh"]

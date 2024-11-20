@@ -158,12 +158,24 @@ func (s *server) MiddlewareHandler(srv any, ss grpc.ServerStream, info *grpc.Str
 	var clis string
 	if p, ok := peer.FromContext(ss.Context()); ok {
 		if mtls, ok := p.AuthInfo.(credentials.TLSInfo); ok {
-			for _, item := range mtls.State.PeerCertificates {
-				clis = item.Subject.CommonName
-				fmt.Println(clis)
+			certs := mtls.State.PeerCertificates
+			if len(certs) > 0 {
+				clis = certs[0].Subject.CommonName
+			} else {
+				fmt.Println("ugh")
 			}
+
+			// for _, item := range mtls.State.PeerCertificates {
+			// 	clis = item.Subject.CommonName
+			// 	fmt.Println(clis)
+			// }
+		} else {
+			fmt.Println("crap")
 		}
+	} else {
+		fmt.Println("fuck")
 	}
+
 	// ctx, cancel := context.WithCancel(ss.Context())
 	// go func(c <-chan time.Time) {
 	// 	<-c
