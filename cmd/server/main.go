@@ -2,11 +2,9 @@ package main
 
 import (
 	"context"
-	"crypto/x509"
 	"errors"
 	"io"
 	"log"
-	"strconv"
 	"sync"
 
 	"codeberg.org/shinyzero0/vtb-api-2024-grpc/utils"
@@ -31,7 +29,7 @@ type Chat struct {
 }
 type Client struct {
 	ch (chan *proto.StreamResponse)
-	id int64
+	id string
 	// srv grpc.BidiStreamingServer[proto.StreamRequest, proto.StreamResponse]
 }
 
@@ -42,13 +40,13 @@ func (c *Client) HandleMessages(bidi grpc.BidiStreamingServer[proto.StreamReques
 		}
 	}
 }
-func (c *Client) SendMessage(req *proto.StreamRequest, sid int64) {
+func (c *Client) SendMessage(req *proto.StreamRequest, sid string) {
 	c.ch <- &proto.StreamResponse{
 		Message:  req.GetMessage(),
 		SenderId: sid,
 	}
 }
-func (c *Chat) ConnectClient(cid int64) Client {
+func (c *Chat) ConnectClient(cid string) Client {
 	c.clients_mtx.Lock()
 	defer c.clients_mtx.Unlock()
 	cli := Client{
@@ -64,7 +62,7 @@ func (c *Chat) DisconnectClient(cli Client) {
 	delete(c.Clients, cli)
 	close(cli.ch)
 }
-func (c *Chat) SendMessage(req *proto.StreamRequest, sid int64) {
+func (c *Chat) SendMessage(req *proto.StreamRequest, sid string) {
 	c.clients_mtx.RLock()
 	defer c.clients_mtx.RUnlock()
 	for cli := range c.Clients {
@@ -155,12 +153,12 @@ func (w *wrappedServerStream) Context() context.Context {
 	return w.ctx
 }
 func (s *server) MiddlewareHandler(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) (err error) {
-	var clis string
+	var cn string
 	if p, ok := peer.FromContext(ss.Context()); ok {
 		if mtls, ok := p.AuthInfo.(credentials.TLSInfo); ok {
 			certs := mtls.State.PeerCertificates
 			if len(certs) > 0 {
-				clis = certs[0].Subject.CommonName
+				cn = certs[0].Subject.CommonName
 			} else {
 				fmt.Println("ugh")
 			}
@@ -182,11 +180,7 @@ func (s *server) MiddlewareHandler(srv any, ss grpc.ServerStream, info *grpc.Str
 	// 	cancel()
 	// 	return
 	// }(time.NewTimer(exp.Time.Sub(time.Now())).C)
-	sub, err := parseInt64(clis)
-	if err != nil {
-		fmt.Println(err)
-	}
-	cli := s.chat.ConnectClient(sub)
+	cli := s.chat.ConnectClient(cn)
 	defer s.chat.DisconnectClient(cli)
 	ctx := context.WithValue(ss.Context(), "cli", cli)
 	newss := &wrappedServerStream{
@@ -196,16 +190,16 @@ func (s *server) MiddlewareHandler(srv any, ss grpc.ServerStream, info *grpc.Str
 
 	return handler(srv, newss)
 }
-func parseInt64(s string) (int64, error) {
-	return strconv.ParseInt(s, 10, 64)
-}
+// func parseInt64(s string) (int64, error) {
+// 	return strconv.ParseInt(s, 10, 64)
+// }
 
-func mapTlsSubject(sub string) func(x509.Certificate) string {
-	return map[string]func(x509.Certificate) string{
-		"tls_client_auth_subject_dn": func(c x509.Certificate) string { return c.Subject.String() },
-		"tls_client_auth_san_dns":    func(c x509.Certificate) string { return c.DNSNames[0] },
-		"tls_client_auth_san_uri":    func(c x509.Certificate) string { return c.URIs[0].String() },
-		"tls_client_auth_san_ip":     func(c x509.Certificate) string { return string(c.IPAddresses[0]) },
-		"tls_client_auth_san_email":  func(c x509.Certificate) string { return c.EmailAddresses[0] },
-	}[sub]
-}
+// func mapTlsSubject(sub string) func(x509.Certificate) string {
+// 	return map[string]func(x509.Certificate) string{
+// 		"tls_client_auth_subject_dn": func(c x509.Certificate) string { return c.Subject.String() },
+// 		"tls_client_auth_san_dns":    func(c x509.Certificate) string { return c.DNSNames[0] },
+// 		"tls_client_auth_san_uri":    func(c x509.Certificate) string { return c.URIs[0].String() },
+// 		"tls_client_auth_san_ip":     func(c x509.Certificate) string { return string(c.IPAddresses[0]) },
+// 		"tls_client_auth_san_email":  func(c x509.Certificate) string { return c.EmailAddresses[0] },
+// 	}[sub]
+// }

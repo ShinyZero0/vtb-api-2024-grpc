@@ -15,5 +15,5 @@ message	StreamRequest {
 
 message	StreamResponse {
 	string message = 2;
-	int64 sender_id = 6;
+	string sender_id = 6;
 }

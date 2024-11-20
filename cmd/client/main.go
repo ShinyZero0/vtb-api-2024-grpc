@@ -97,7 +97,7 @@ func recv(bidi grpc.BidiStreamingClient[proto.StreamRequest, proto.StreamRespons
 			fmt.Println(err)
 			break
 		}
-		fmt.Printf("%d says: %s\n", msg.GetSenderId(), msg.Message)
+		fmt.Printf("%s says: %s\n", msg.GetSenderId(), msg.Message)
 	}
 }
 
