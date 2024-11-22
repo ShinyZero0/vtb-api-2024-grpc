@@ -5,7 +5,9 @@ import (
 	"errors"
 	"log"
 	"sync"
+	"time"
 
+	// models "codeberg.org/shinyzero0/vtb-api-2024-grpc/server-models"
 	"codeberg.org/shinyzero0/vtb-api-2024-grpc/utils"
 
 	"fmt"
@@ -18,6 +20,11 @@ import (
 	"google.golang.org/grpc/peer"
 )
 
+type Storage interface {
+	AppendMessage(ctx context.Context, m msg, sid string) error
+	// GetHistory(ctx context.Context, until int64) []*models.Message
+}
+
 func main() {
 	fmt.Println(f())
 }
@@ -25,6 +32,7 @@ func main() {
 type Chat struct {
 	Clients     map[Client]struct{}
 	clients_mtx sync.RWMutex
+	strg        Storage
 }
 type Client struct {
 	ch (chan *proto.StreamResponse)
@@ -66,22 +74,25 @@ func (c *Chat) UnsubscribeClient(cli Client) {
 }
 
 type msg struct {
-	Message string
+	Message   string
+	timestamp time.Time
 }
 
-func (c *Chat) SendMessage(req msg, sid string) {
+func (c *Chat) SendMessage(req msg, sid string) error {
 	c.clients_mtx.RLock()
 	defer c.clients_mtx.RUnlock()
 	for cli := range c.Clients {
 		cli.SendMessage(req, sid)
 	}
+	return c.strg.AppendMessage(context.Background(), req, sid)
 }
 
 func f() error {
 	certfile, err1 := utils.GetEnv("CERTFILE")
 	keyfile, err2 := utils.GetEnv("KEYFILE")
 	cafile, err3 := utils.GetEnv("CAFILE")
-	if err := errors.Join(err1, err2, err3); err != nil {
+	dsn, err4 := utils.GetEnv("STORAGE_DSN")
+	if err := errors.Join(err1, err2, err3, err4); err != nil {
 		return err
 	}
 	lisAddr, err := utils.GetEnv("LISTEN_ADDR")
@@ -100,10 +111,15 @@ func f() error {
 	if err != nil {
 		return err
 	}
+	strg, err := NewStorage(dsn)
+	if err != nil {
+		return err
+	}
 	s := &server{
 		chat: Chat{
 			Clients:     make(map[Client]struct{}),
 			clients_mtx: sync.RWMutex{},
+			strg:        strg,
 		},
 		jwtSecret: jwtSecret,
 	}
@@ -131,9 +147,11 @@ func (s *server) SendSingle(ctx context.Context, req *proto.SendRequest) (*proto
 	if !ok {
 		return nil, fmt.Errorf("wtf? no CN in context?")
 	}
-	fmt.Println("before")
-	s.chat.SendMessage(msg{Message: req.GetMessage()}, cn)
-	fmt.Println("after")
+	// fmt.Println("before")
+	if err := s.chat.SendMessage(msg{Message: req.GetMessage(), timestamp: time.Now()}, cn); err != nil {
+		return nil, err
+	}
+	// fmt.Println("after")
 	return &proto.SendResponse{}, nil
 }
 
