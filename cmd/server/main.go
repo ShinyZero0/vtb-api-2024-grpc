@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"io"
 	"log"
 	"sync"
 
@@ -33,21 +32,21 @@ type Client struct {
 	// srv grpc.BidiStreamingServer[proto.StreamRequest, proto.StreamResponse]
 }
 
-func (c *Client) HandleMessages(bidi grpc.BidiStreamingServer[proto.StreamRequest, proto.StreamResponse]) {
+func (c *Client) HandleMessages(str grpc.ServerStreamingServer[proto.StreamResponse]) {
 	for msg := range c.ch {
-		if err := bidi.Send(msg); err != nil {
+		if err := str.Send(msg); err != nil {
 			log.Println(err)
 		}
 		fmt.Printf("sent %s to %s\n", msg, c.id)
 	}
 }
-func (c *Client) SendMessage(req *proto.StreamRequest, sid string) {
+func (c *Client) SendMessage(req msg, sid string) {
 	c.ch <- &proto.StreamResponse{
-		Message:  req.GetMessage(),
+		Message:  req.Message,
 		SenderId: sid,
 	}
 }
-func (c *Chat) ConnectClient(cid string) Client {
+func (c *Chat) SubscribeClient(cid string) Client {
 	c.clients_mtx.Lock()
 	defer c.clients_mtx.Unlock()
 	cli := Client{
@@ -58,14 +57,19 @@ func (c *Chat) ConnectClient(cid string) Client {
 	fmt.Printf("client %s connected\n", cid)
 	return cli
 }
-func (c *Chat) DisconnectClient(cli Client) {
+func (c *Chat) UnsubscribeClient(cli Client) {
 	c.clients_mtx.Lock()
 	defer c.clients_mtx.Unlock()
 	delete(c.Clients, cli)
 	fmt.Printf("client %s disconnected\n", cli.id)
 	close(cli.ch)
 }
-func (c *Chat) SendMessage(req *proto.StreamRequest, sid string) {
+
+type msg struct {
+	Message string
+}
+
+func (c *Chat) SendMessage(req msg, sid string) {
 	c.clients_mtx.RLock()
 	defer c.clients_mtx.RUnlock()
 	for cli := range c.Clients {
@@ -97,7 +101,6 @@ func f() error {
 		return err
 	}
 	s := &server{
-		UnimplementedChatServer: proto.UnimplementedChatServer{},
 		chat: Chat{
 			Clients:     make(map[Client]struct{}),
 			clients_mtx: sync.RWMutex{},
@@ -106,6 +109,7 @@ func f() error {
 	}
 	srv := grpc.NewServer(
 		grpc.StreamInterceptor(s.MiddlewareHandler),
+		grpc.UnaryInterceptor(s.UnaryMiddlewareHandler),
 		grpc.Creds(tlsconf),
 		// grpc.Creds(tlsconf),
 	)
@@ -120,33 +124,38 @@ type server struct {
 	jwtSecret string
 }
 
+// SendSingle implements generated_proto.ChatServer.
+func (s *server) SendSingle(ctx context.Context, req *proto.SendRequest) (*proto.SendResponse, error) {
+	// fmt.Printf("req: %#v\n", req)
+	cn, ok := ctx.Value("cn").(string)
+	if !ok {
+		return nil, fmt.Errorf("wtf? no CN in context?")
+	}
+	fmt.Println("before")
+	s.chat.SendMessage(msg{Message: req.GetMessage()}, cn)
+	fmt.Println("after")
+	return &proto.SendResponse{}, nil
+}
+
+// mustEmbedUnimplementedChatServer implements generated_proto.ChatServer.
+
 // Stream implements generated_proto.ChatServer.
-func (s *server) Stream(bidi grpc.BidiStreamingServer[proto.StreamRequest, proto.StreamResponse]) error {
-	cli, ok := bidi.Context().Value("cli").(Client)
+func (s *server) Stream(req *proto.StreamRequest, str grpc.ServerStreamingServer[proto.StreamResponse]) error {
+	cli, ok := str.Context().Value("cli").(Client)
 	if !ok {
 		return fmt.Errorf("wtf? no client in context?")
 	}
-	go cli.HandleMessages(bidi)
-LOOP:
-	for {
-		select {
-		case <-bidi.Context().Done():
-			fmt.Println("done")
-			break LOOP
-		default:
-			req, err := bidi.Recv()
-			if err != nil {
-				if errors.Is(err, io.EOF) {
-					// fmt.Println("eof")
-					continue LOOP
-				}
-				return err
-			}
-			// fmt.Printf("req: %#v\n", req)
-			s.chat.SendMessage(req, cli.id)
-		}
-	}
-	return bidi.Context().Err()
+	cli.HandleMessages(str)
+	// LOOP:
+	// 	for {
+	// 		select {
+	// 		case <-str.Context().Done():
+	// 			fmt.Println("done")
+	// 			break LOOP
+	// 		default:
+	// 		}
+	// 	}
+	return str.Context().Err()
 }
 
 type wrappedServerStream struct {
@@ -158,15 +167,15 @@ type wrappedServerStream struct {
 func (w *wrappedServerStream) Context() context.Context {
 	return w.ctx
 }
-func (s *server) MiddlewareHandler(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) (err error) {
+func CNFromContext(ctx context.Context) (string, error) {
 	var cn string
-	if p, ok := peer.FromContext(ss.Context()); ok {
+	if p, ok := peer.FromContext(ctx); ok {
 		if mtls, ok := p.AuthInfo.(credentials.TLSInfo); ok {
 			certs := mtls.State.PeerCertificates
 			if len(certs) > 0 {
 				cn = certs[0].Subject.CommonName
 			} else {
-				return fmt.Errorf("ugh")
+				return cn, fmt.Errorf("ugh")
 			}
 
 			// for _, item := range mtls.State.PeerCertificates {
@@ -174,20 +183,26 @@ func (s *server) MiddlewareHandler(srv any, ss grpc.ServerStream, info *grpc.Str
 			// 	fmt.Println(clis)
 			// }
 		} else {
-			return fmt.Errorf("crap")
+			return cn, fmt.Errorf("crap")
 		}
 	} else {
-		return fmt.Errorf("fuck")
+		return cn, fmt.Errorf("fuck")
 	}
+	return cn, nil
+}
+func (s *server) MiddlewareHandler(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) (err error) {
 
-	// ctx, cancel := context.WithCancel(ss.Context())
+	cn, err := CNFromContext(ss.Context()) // ctx, cancel := context.WithCancel(ss.Context())
+	if err != nil {
+		return err
+	}
 	// go func(c <-chan time.Time) {
 	// 	<-c
 	// 	cancel()
 	// 	return
 	// }(time.NewTimer(exp.Time.Sub(time.Now())).C)
-	cli := s.chat.ConnectClient(cn)
-	defer s.chat.DisconnectClient(cli)
+	cli := s.chat.SubscribeClient(cn)
+	defer s.chat.UnsubscribeClient(cli)
 	ctx := context.WithValue(ss.Context(), "cli", cli)
 	newss := &wrappedServerStream{
 		ServerStream: ss,
@@ -196,6 +211,17 @@ func (s *server) MiddlewareHandler(srv any, ss grpc.ServerStream, info *grpc.Str
 
 	return logerr(handler(srv, newss))
 }
+func (s *server) UnaryMiddlewareHandler(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+	// you can write your own code here to check client tls certificate
+	cn, err := CNFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// cli := s.chat.ConnectClient(cn)
+	// defer s.chat.DisconnectClient(cli)
+	return handler(context.WithValue(ctx, "cn", cn), req)
+}
+
 func logerr(erri error) error {
 	// fmt.Println(erri)
 	return erri

@@ -6,14 +6,17 @@ package	chat;
 option go_package="codeberg.org/shinyzero0/vtb-api-2024-grpc/generated-proto";
 
 service	Chat {
-	rpc	Stream(stream StreamRequest) returns (stream StreamResponse) {}
+	rpc	Stream(StreamRequest) returns (stream StreamResponse) {};
+	rpc SendSingle(SendRequest) returns (SendResponse);
 }
 
-message	StreamRequest {
-	string message = 2;
-}
+message	StreamRequest {}
 
 message	StreamResponse {
 	string message = 2;
 	string sender_id = 6;
 }
+message SendRequest {
+	string message = 2;
+}
+message SendResponse {}

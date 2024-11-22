@@ -85,39 +85,33 @@ type SendOne func(ctx context.Context, msg string) error
 
 func MakeSendOne(ccli proto.ChatClient) SendOne {
 	return func(ctx context.Context, msg string) error {
-		str, err := ccli.Stream(ctx)
-		if err != nil {
-			return err
-		}
-		defer str.CloseSend()
-		fmt.Println(str.Send(&proto.StreamRequest{
+		_, err := ccli.SendSingle(ctx, &proto.SendRequest{
 			Message: msg,
-		}))
-		time.Sleep(100 * time.Millisecond)
+		})
+		return err
 		// fmt.Println(str.CloseSend())
-		return nil
 	}
 }
 func MakeSpam(ccli proto.ChatClient) Spam {
 	return func(ctx context.Context) error {
-		str, err := ccli.Stream(ctx)
+		str, err := ccli.Stream(ctx, &proto.StreamRequest{})
 		if err != nil {
 			return err
 		}
-		defer str.CloseSend()
-		go send(str)
+		go send(ctx, ccli)
 		recv(str)
 		return nil
 	}
 }
-func send(bidi grpc.BidiStreamingClient[proto.StreamRequest, proto.StreamResponse]) {
+func send(ctx context.Context, ccli proto.ChatClient) {
 	if true {
 		loremIpsumGenerator := loremipsum.New()
 		// tick := time.Tick(300 * time.Millisecond)
 		for i := 0; true; i++ {
 			text := loremIpsumGenerator.Paragraph()
 			_ = text
-			if err := bidi.Send(&proto.StreamRequest{Message: fmt.Sprint(i)}); err != nil {
+			_, err := ccli.SendSingle(ctx, &proto.SendRequest{Message: fmt.Sprint(i)})
+			if err != nil {
 				fmt.Println(err)
 				break
 			}
@@ -126,7 +120,7 @@ func send(bidi grpc.BidiStreamingClient[proto.StreamRequest, proto.StreamRespons
 		}
 	}
 }
-func recv(bidi grpc.BidiStreamingClient[proto.StreamRequest, proto.StreamResponse]) {
+func recv(bidi grpc.ServerStreamingClient[proto.StreamResponse]) {
 	for {
 		msg, err := bidi.Recv()
 		if err != nil {

@@ -1,3 +1,14 @@
+# теперь не bidi streams
+
+только server-side стримы для real-time обновлений, т.к. client-side
+создает ненужные сложости и не дает ощутимого прироста
+производительности (to be benchmarked) (см. источники)
+
+## srcs
+
+- <https://medium.com/@anton_tomchuk/grpc-chat-using-client-and-bi-directional-streaming-d3a7662482d4>
+- <https://stackoverflow.com/questions/47971020/unary-vs-stream-benchmark>
+
 # регистрация OIDC провайдера в smallstep
 
 ID и секрет клиента настроены в mock сервере, нужно вставить свои
