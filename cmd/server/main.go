@@ -124,7 +124,7 @@ type server struct {
 func (s *server) Stream(bidi grpc.BidiStreamingServer[proto.StreamRequest, proto.StreamResponse]) error {
 	cli, ok := bidi.Context().Value("cli").(Client)
 	if !ok {
-		panic("fuck")
+		return fmt.Errorf("wtf? no client in context?")
 	}
 	go cli.HandleMessages(bidi)
 LOOP:
@@ -166,7 +166,7 @@ func (s *server) MiddlewareHandler(srv any, ss grpc.ServerStream, info *grpc.Str
 			if len(certs) > 0 {
 				cn = certs[0].Subject.CommonName
 			} else {
-				fmt.Println("ugh")
+				return fmt.Errorf("ugh")
 			}
 
 			// for _, item := range mtls.State.PeerCertificates {
@@ -174,10 +174,10 @@ func (s *server) MiddlewareHandler(srv any, ss grpc.ServerStream, info *grpc.Str
 			// 	fmt.Println(clis)
 			// }
 		} else {
-			fmt.Println("crap")
+			return fmt.Errorf("crap")
 		}
 	} else {
-		fmt.Println("fuck")
+		return fmt.Errorf("fuck")
 	}
 
 	// ctx, cancel := context.WithCancel(ss.Context())
