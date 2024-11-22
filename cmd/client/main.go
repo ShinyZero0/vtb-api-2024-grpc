@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+
 	"time"
 
 	proto "codeberg.org/shinyzero0/vtb-api-2024-grpc/generated-proto"
@@ -23,6 +24,16 @@ func main() {
 		os.Exit(1)
 	}
 }
+func DispatchCmd(so SendOne, spam Spam) error {
+	ctx := context.Background()
+	if len(os.Args) == 3 {
+		return so(ctx, os.Args[2])
+	} else if len(os.Args) == 2 && os.Args[1] == "spam" {
+		return spam(ctx)
+	}
+	return fmt.Errorf("aaah")
+}
+
 func f() error {
 	srvAddr, err0 := utils.GetEnv("SERVER_ADDR")
 	certfile, err1 := utils.GetEnv("CERTFILE")
@@ -47,7 +58,6 @@ func f() error {
 	// if err != nil {
 	// 	return err
 	// }
-	ctx := context.Background()
 	// const host = "localhost"
 	// certfile, err1 := utils.GetEnv("CERTFILE")
 	// keyfile, err2 := utils.GetEnv("KEYFILE")
@@ -66,25 +76,54 @@ func f() error {
 		return err
 	}
 	ccli := proto.NewChatClient(conn)
-	str, err := ccli.Stream(ctx)
-	if err != nil {
-		return err
-	}
-	go send(str)
-	recv(str)
+	return DispatchCmd(MakeSendOne(ccli), MakeSpam(ccli))
+}
 
-	return nil
+type Spam func(ctx context.Context) error
+
+type SendOne func(ctx context.Context, msg string) error
+
+func MakeSendOne(ccli proto.ChatClient) SendOne {
+	return func(ctx context.Context, msg string) error {
+		str, err := ccli.Stream(ctx)
+		if err != nil {
+			return err
+		}
+		defer str.CloseSend()
+		fmt.Println(str.Send(&proto.StreamRequest{
+			Message: msg,
+		}))
+		time.Sleep(100 * time.Millisecond)
+		// fmt.Println(str.CloseSend())
+		return nil
+	}
+}
+func MakeSpam(ccli proto.ChatClient) Spam {
+	return func(ctx context.Context) error {
+		str, err := ccli.Stream(ctx)
+		if err != nil {
+			return err
+		}
+		defer str.CloseSend()
+		go send(str)
+		recv(str)
+		return nil
+	}
 }
 func send(bidi grpc.BidiStreamingClient[proto.StreamRequest, proto.StreamResponse]) {
-	loremIpsumGenerator := loremipsum.New()
-	// tick := time.Tick(300 * time.Millisecond)
-	for {
-		text := loremIpsumGenerator.Paragraph()
-		if err := bidi.Send(&proto.StreamRequest{Message: text}); err != nil {
-			fmt.Println(err)
-			break
+	if true {
+		loremIpsumGenerator := loremipsum.New()
+		// tick := time.Tick(300 * time.Millisecond)
+		for i := 0; true; i++ {
+			text := loremIpsumGenerator.Paragraph()
+			_ = text
+			if err := bidi.Send(&proto.StreamRequest{Message: fmt.Sprint(i)}); err != nil {
+				fmt.Println(err)
+				break
+			}
+			// fmt.Printf("sent %d at %s", i, time.Now())
+			time.Sleep(5000 * time.Millisecond)
 		}
-		time.Sleep(300 * time.Millisecond)
 	}
 }
 func recv(bidi grpc.BidiStreamingClient[proto.StreamRequest, proto.StreamResponse]) {
@@ -97,7 +136,7 @@ func recv(bidi grpc.BidiStreamingClient[proto.StreamRequest, proto.StreamRespons
 			fmt.Println(err)
 			break
 		}
-		fmt.Printf("%s says: %s\n", msg.GetSenderId(), msg.Message)
+		fmt.Printf("%s says: %s at %s\n", msg.GetSenderId(), msg.Message, time.Now())
 	}
 }
 

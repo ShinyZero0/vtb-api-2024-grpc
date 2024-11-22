@@ -38,6 +38,7 @@ func (c *Client) HandleMessages(bidi grpc.BidiStreamingServer[proto.StreamReques
 		if err := bidi.Send(msg); err != nil {
 			log.Println(err)
 		}
+		fmt.Printf("sent %s to %s\n", msg, c.id)
 	}
 }
 func (c *Client) SendMessage(req *proto.StreamRequest, sid string) {
@@ -54,12 +55,14 @@ func (c *Chat) ConnectClient(cid string) Client {
 		id: cid,
 	}
 	c.Clients[cli] = struct{}{}
+	fmt.Printf("client %s connected\n", cid)
 	return cli
 }
 func (c *Chat) DisconnectClient(cli Client) {
 	c.clients_mtx.Lock()
 	defer c.clients_mtx.Unlock()
 	delete(c.Clients, cli)
+	fmt.Printf("client %s disconnected\n", cli.id)
 	close(cli.ch)
 }
 func (c *Chat) SendMessage(req *proto.StreamRequest, sid string) {
@@ -128,19 +131,22 @@ LOOP:
 	for {
 		select {
 		case <-bidi.Context().Done():
+			fmt.Println("done")
 			break LOOP
 		default:
 			req, err := bidi.Recv()
 			if err != nil {
 				if errors.Is(err, io.EOF) {
+					// fmt.Println("eof")
 					continue LOOP
 				}
 				return err
 			}
+			// fmt.Printf("req: %#v\n", req)
 			s.chat.SendMessage(req, cli.id)
 		}
 	}
-	return nil
+	return bidi.Context().Err()
 }
 
 type wrappedServerStream struct {
@@ -188,8 +194,13 @@ func (s *server) MiddlewareHandler(srv any, ss grpc.ServerStream, info *grpc.Str
 		ctx:          ctx,
 	}
 
-	return handler(srv, newss)
+	return logerr(handler(srv, newss))
 }
+func logerr(erri error) error {
+	// fmt.Println(erri)
+	return erri
+}
+
 // func parseInt64(s string) (int64, error) {
 // 	return strconv.ParseInt(s, 10, 64)
 // }
