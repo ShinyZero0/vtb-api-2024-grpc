@@ -4,10 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"time"
 
 	models "codeberg.org/shinyzero0/vtb-api-2024-grpc/server-models"
 	"github.com/volatiletech/sqlboiler/v4/boil"
+	"github.com/volatiletech/sqlboiler/v4/queries"
 	_ "modernc.org/sqlite"
 )
 
@@ -18,13 +20,32 @@ type storage struct {
 
 // GetHistory implements Storage.
 func (s storage) GetHistory(ctx context.Context, until int64, amount int64) ([]msgxuser, error) {
-	msgs, err := models.Messages().All(ctx, s.r)
+	msgs := queries.Raw(`
+		SELECT * FROM
+		(SELECT * FROM messages
+			WHERE timestamp < ?
+			ORDER BY message_id DESC
+			LIMIT ?)
+		ORDER BY message_id ASC
+
+			`, until, amount)
+	// msgs := models.Messages(
+	// 	qm.Limit(int(amount)),
+	// 	qm.OrderBy(models.MessageColumns.MessageID),
+	// 	qm.Where(models.MessageColumns.Timestamp+"< ?", until))
+
+	rows, err := msgs.QueryContext(ctx, s.r)
 	if err != nil {
 		return nil, err
 	}
-	result := make([]msgxuser, len(msgs))
-	for k, v := range msgs {
-		result[k] = msgxuser{
+	result := make([]msgxuser, amount)
+	for i := 0; rows.Next(); i++ {
+		v := models.Message{}
+		if err := rows.Scan(&v.MessageID, &v.UserID, &v.Content, &v.Timestamp); err != nil {
+			fmt.Println(err)
+			continue
+		}
+		result[i] = msgxuser{
 			msg: msg{
 				Message:   v.Content,
 				timestamp: time.Unix(v.Timestamp, 0),
