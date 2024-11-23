@@ -18,4 +18,5 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
 	make
 COPY entrypoint.sh /
+ENV STORAGE_DSN="file:///project/server.db?_pragma=journal_mode(wal)&_pragma=synchronous(normal)&pragma=mmap_size(2000000000)"
 ENTRYPOINT ["/entrypoint.sh"]
