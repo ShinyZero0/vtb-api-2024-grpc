@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	// models "codeberg.org/shinyzero0/vtb-api-2024-grpc/server-models"
 	"codeberg.org/shinyzero0/vtb-api-2024-grpc/utils"
 
 	"fmt"
@@ -77,6 +76,11 @@ type msg struct {
 	Message   string
 	timestamp time.Time
 }
+type msgxuser struct {
+	msg
+	CN string
+	ID int64
+}
 
 func (c *Chat) SendMessage(req msg, sid string) error {
 	c.clients_mtx.RLock()
@@ -138,6 +142,25 @@ type server struct {
 	proto.UnimplementedChatServer
 	chat      Chat
 	jwtSecret string
+}
+
+// History implements generated_proto.ChatServer.
+func (s *server) History(req *proto.HistoryRequest, ss grpc.ServerStreamingServer[proto.StreamResponse]) error {
+	msgs, err := s.chat.strg.GetHistory(ss.Context(), req.UntilTimestamp, req.Amount)
+	if err != nil {
+		return err
+	}
+	for _, m := range msgs {
+		if err := ss.Send(&proto.StreamResponse{
+			Message:   m.Message,
+			MessageId: m.ID,
+			SenderId:  m.CN,
+			Timestamp: m.timestamp.Unix(),
+		}); err != nil {
+			fmt.Println(err)
+		}
+	}
+	return nil
 }
 
 // SendSingle implements generated_proto.ChatServer.
